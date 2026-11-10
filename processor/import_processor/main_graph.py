@@ -1,6 +1,7 @@
 # processor/import_processor/main_graph.py
 
 import json
+import logging
 
 from langgraph.constants import END
 from langgraph.graph import StateGraph
@@ -46,6 +47,7 @@ class KBImportWorkflow:
         elif state.get("is_md_read_enabled"):
             return "node_md_img"
         else:
+            logging.info("route_after_entry路由节点未指定文件类型")
             return END
 
     def build_graph(self):
@@ -108,9 +110,10 @@ class KBImportWorkflow:
 if __name__ == "__main__":
     # 启用日志
     setup_logging()
-    """
+
     # 定义初始状态
-    init_state = {"import_file_path": r"D:\doc\hak180产品安全手册.pdf"}
+    init_state = {"import_file_path": f"E:/BaiduNetdiskDownload/零基础推荐：Agent智能体应用极速版/阶段08：项目一：RAG项目/4.资料/03-设备手册汇总/doc/hak180产品安全手册.pdf"}
+    #init_state = {"import_file_path":f"E:/BaiduNetdiskDownload/零基础推荐：Agent智能体应用极速版/阶段08：项目一：RAG项目/4.资料/01-镜像/利用ssh反向隧道进行镜像加速/Docker镜像加速.md"}
     workflow = KBImportWorkflow()
 
 # 方式1：实例化后使用（推荐方式，可复用）
@@ -118,12 +121,8 @@ for event in workflow.run(init_state, stream=True):
     print(f"state: {event}")
 
 # 方式2：非流式执行
-final_state = workflow.run(init_state, stream=False)
-print(json.dumps(final_state, ensure_ascii=False, indent=4))
+#final_state = workflow.run(init_state, stream=False)
+#print(json.dumps(final_state, ensure_ascii=False, indent=4))
 
 # 打印编译后的图结构
-workflow.graph.get_graph().print_ascii()
-    """
-    workflow = KBImportWorkflow()
-    graph = workflow.graph
-    print(graph)
+#workflow.graph.get_graph().print_ascii()
