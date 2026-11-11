@@ -29,6 +29,7 @@ class NodePDFToMD(BaseNode):
 
         # 2、上传PDF至MinerU并轮询解析结果
         zip_url = self._step_2_upload_and_poll(pdf_path_obj)
+        print(f"已经下载地址url:{zip_url}")
 
         # 3、下载ZIP包并提取MD文件
         md_path = self._step_3_download_and_extract(zip_url, output_dir_obj, pdf_path_obj.stem)
@@ -86,11 +87,16 @@ class NodePDFToMD(BaseNode):
         """
 
         # 1. 从MinerU服务器获取上传链接
-        token = mineru_config.api_token
-        url = f"{mineru_config.base_url}/file-urls/batch"
+        api_token = mineru_config.api_token
+        base_url = f"{mineru_config.base_url}/file-urls/batch"
+        if not api_token:
+            raise FileProcessingError(message="api_token未进行配置")
+        if not base_url:
+            raise FileProcessingError(message="base_url未进行配置")
+
         header = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}"
+            "Authorization": f"Bearer {api_token}"
         }
         data = {
             "files": [
@@ -100,27 +106,26 @@ class NodePDFToMD(BaseNode):
         }
 
         # 获取上传url和任务的batch_id
-        response = requests.post(url, headers=header, json=data)
+        response = requests.post(base_url, headers=header, json=data)
 
-        # 对响应结果进行校验
-        # 先校验http状态
+        # 对响应结果进行校验,先校验http状态
         if response.status_code != 200:
             raise PdfConversionError(message=f"获取上传链接响应失败：状态码：{response.status_code}，响应结果：{response}")
 
         # 校验业务码
-        result = response.json()
-        if result.get("code") != 0:
-            raise PdfConversionError(f"获取上传链接失败：返回数据：{result}")
+        result_json = response.json()
+        if result_json.get("code") != 0:
+            raise PdfConversionError(f"获取上传链接失败：返回数据：{result_json}")
 
         # 获取响应结果
-        signed_url = result["data"]["file_urls"][0]
-        batch_id = result["data"]["batch_id"]
+        signed_url = result_json["data"]["file_urls"][0]
+        batch_id = result_json["data"]["batch_id"]
 
         # 2. 文件上传
         with open(pdf_path_obj, "rb") as f:
-            res_upload = requests.put(signed_url, data=f)
-            if res_upload.status_code != 200:
-                raise PdfConversionError(f"文件上传失败：状态码：{res_upload.status_code}，响应结果：{res_upload}")
+            result_upload = requests.put(signed_url, data=f)
+            if result_upload.status_code != 200:
+                raise PdfConversionError(f"文件上传失败：状态码：{result_upload.status_code}，响应结果：{result_upload}")
 
             self.logger.info(f"文件上传成功！")
 
@@ -137,24 +142,24 @@ class NodePDFToMD(BaseNode):
             # 已消耗时间
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout_seconds:
-                raise TimeoutError(f"【任务轮询】超时！任务处理超{timeout_seconds}秒，batch_id：{batch_id}")
+                raise TimeoutError(f"【任务轮询】超时异常！任务处理超{timeout_seconds}秒，batch_id：{batch_id}")
 
             # 发起轮询请求，短超时10秒，异常则重试
             try:
-                res_poll = requests.get(url=poll_url, headers=header, timeout=10)
+                res_poll = requests.get(url=poll_url, headers=header, timeout=10)#######整个核心业务只有这一行是有用的
             except Exception as e:
-                self.logger.warning(f"【任务轮询】网络请求异常，{poll_interval}秒后重试：{str(e)}，bactch_id：{batch_id}")
+                self.logger.warning(f"【任务轮询】网络请求异常！{poll_interval}秒后重试：{str(e)}，batch_id：{batch_id}")
                 time.sleep(poll_interval)
                 continue
 
             # 处理HTTP响应错误
             if res_poll.status_code != 200:
-                raise PdfConversionError(f"【任务轮询】HTTP请求失败，状态码：{res_poll.status_code}，响应内容：{res_poll}")
+                raise PdfConversionError(f"【任务轮询】HTTP请求失败！状态码：{res_poll.status_code}，响应内容：{res_poll}")
 
             # 解析轮询结果，校验业务状态
             poll_data = res_poll.json()
             if poll_data["code"] != 0:
-                raise PdfConversionError(f"【任务轮询】业务错误，返回数据：{poll_data}")
+                raise PdfConversionError(f"【任务轮询】业务错误！返回数据：{poll_data}")
 
             extract_results = poll_data["data"]["extract_result"]
 
@@ -162,12 +167,12 @@ class NodePDFToMD(BaseNode):
             result_item = extract_results[0]
             data_state = result_item["state"]
 
-            # 状态为 done
+            # 状态为done，表示任务已经完成
             if data_state == "done":
-                self.logger.info(f"【任务轮询】解析任务完成！总耗时{int(elapsed_time)}s，bactch_id：{batch_id}")
+                self.logger.info(f"【任务轮询】解析任务完成！总耗时{int(elapsed_time)}s，batch_id：{batch_id}")
 
                 full_zip_url = result_item["full_zip_url"]
-                self.logger.info(f"【任务轮询】返回ZIP包下载链接：{full_zip_url}，bactch_id：{batch_id}")
+                self.logger.info(f"【任务轮询】返回ZIP包下载链接：{full_zip_url}，batch_id：{batch_id}")
 
                 return full_zip_url
 
@@ -226,9 +231,9 @@ class NodePDFToMD(BaseNode):
         target_md_file.rename(new_md_path)
         self.logger.info(f"【MD重命名】重命名成功，文件名：{pdf_stem}.md")
 
-        return str(new_md_path.absolute())
-
-if __name__ == "__main__":
+        return str(new_md_path.absolute())# 返回绝对路径
+"""
+   if __name__ == "__main__":
 
     setup_logging()
 
@@ -241,4 +246,5 @@ if __name__ == "__main__":
 
     #logging.getLogger().info(json.dumps(result, ensure_ascii=False, indent=4))
     dumps = json.dumps(result, ensure_ascii=False, indent=4)
-    print(dumps)
+    print(dumps) 
+"""
