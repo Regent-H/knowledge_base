@@ -77,7 +77,6 @@ class NodeMDImg(BaseNode):
         :return: 元组(MD文件内容, MD文件路径, 图片文件夹路径)
         :raise FileProcessingError: 当状态中无有效MD文件路径时抛出
         """
-
         # 1、参数非空校验
         md_path = state.get("md_path")
         if not md_path:
@@ -95,6 +94,9 @@ class NodeMDImg(BaseNode):
 
         # 5、组装图片文件夹路径：图片文件夹固定为MD文件同级的images目录
         images_dir = md_path_obj.parent / "images"
+        # 临时新增这两句，跑完看控制台输出：
+        print("md所在目录：", md_path_obj.parent)
+        print("图片完整路径：", images_dir / "d0cffd087fef8721c3fb566d456a08214657c5f...png")
 
         return md_content, md_path_obj, images_dir
 
@@ -341,31 +343,7 @@ class NodeMDImg(BaseNode):
             urls[img_file] = self._upload_to_minio(minio_client, img_path, object_name)
         return urls
 
-    def _upload_to_minio(self, minio_client: Minio, local_path: str, object_name: str) -> str | None:
-        """
-        将单张本地图片上传至MinIO对象存储，并返回公网可访问URL
-        :param minio_client: 初始化完成的MinIO客户端对象
-        :param local_path: 图片本地完整路径
-        :param object_name: MinIO中要存储的对象名称
-        :return: 图片MinIO访问URL（上传失败返回None）
-        """
-        try:
-            # 上传本地文件至MinIO（fput_object：文件流上传，适合大文件）
-            minio_client.fput_object(
-                bucket_name=minio_config.bucket_name,  # MinIO存储桶名（从配置读取）
-                object_name=object_name,  # MinIO对象名称
-                file_path=local_path,  # 本地文件路径
-                # 关键规则：多后缀文件仅拆分最后一个，如test.tar.gz拆分为("test.tar", ".gz")。
-                content_type=f"image/{os.path.splitext(local_path)[1][1:]}"
-            )
 
-            # 构造MinIO基础访问URL
-            base_url = f"http://{minio_config.endpoint}/{minio_config.bucket_name}"
-
-            return f"{base_url}/{object_name}"
-
-        except Exception as e:
-            self.logger.error(f"图片上传MinIO失败：{local_path}，错误信息：{str(e)}")
 
     def _merge_summary_and_url(self, summaries: Dict[str, str], urls: Dict[str, str]) -> Dict[str, Tuple[str, str]]:
         """
@@ -424,3 +402,24 @@ class NodeMDImg(BaseNode):
         self.logger.info(f"处理后MD文件已保存，新文件路径：{new_md_file_name}")
 
         return new_md_file_name
+
+"""
+if __name__ == "__main__":
+
+    setup_logging()
+
+    md_path = r"D:\output\HUAWEI MateBook B3-420 用户指南-(NDZ,Windows11_01,zh-cn)\HUAWEI MateBook B3-420 用户指南-(NDZ,Windows11_01,zh-cn).md"
+    with open(md_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+
+    init_state = {
+        "md_path": md_path,
+        "md_content": md_content
+    }
+
+    # 执行核心处理流程
+    node_md_img = NodeMDImg()
+    result = node_md_img(init_state)
+
+    logging.getLogger().info(json.dumps(result, ensure_ascii=False, indent=4))
+"""
