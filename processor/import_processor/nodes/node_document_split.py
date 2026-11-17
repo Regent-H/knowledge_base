@@ -291,8 +291,9 @@ class NodeDocumentSplit(BaseNode):
             self.logger.info(f"步骤6：Chunk结果备份成功，备份文件路径：{backup_path}")
         except Exception as e:
             # 备份失败仅记录日志，不终止主流程
-            self.logger.error(f"步骤6：Chunk结果备份失败，错误信息：{str(e)}", exc_info=False)
+            self.logger.error(f"步骤6：Chunk结果备份失败，错误信息：{str(e)}", exc_info=False)-+ 0
 
+"""
 if __name__ == "__main__":
     node = NodeDocumentSplit()
 
@@ -306,3 +307,4 @@ if __name__ == "__main__":
     process = node.process(init_state)
     print(f"process: {process}")
     #print(f"切分节点流程分析！！{md_content}")
+"""
